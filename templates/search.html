@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block title %}Поиск — CineMate{% endblock %}
+
+{% block content %}
+<h1 class="mb-4">Поиск фильмов</h1>
+<form method="get" action="/search" class="mb-4">
+    <div class="input-group">
+        <input type="text" name="q" class="form-control" placeholder="Название фильма..." value="{{ query }}">
+        <button class="btn btn-primary" type="submit">Искать</button>
+    </div>
+</form>
+
+{% if results %}
+    <div class="row row-cols-1 row-cols-md-3 g-4">
+        {% for m in results %}
+            {% if m.error %}
+                <div class="col-12"><div class="alert alert-danger">{{ m.error }}</div></div>
+            {% else %}
+                <div class="col">
+                    <div class="card card-movie">
+                        {% if m.poster_url %}
+                            <img src="{{ m.poster_url }}" class="card-img-top poster" alt="{{ m.title }}">
+                        {% endif %}
+                        <div class="card-body">
+                            <h5 class="card-title">{{ m.title }}</h5>
+                            <button class="btn btn-success btn-sm w-100 mt-2 add-btn" data-tmdb-id="{{ m.tmdb_id }}">
+                                <i class="bi bi-plus-circle"></i> В избранное
+                            </button>
+                            <p class="card-text small text-muted">{{ m.release_date }}</p>
+                            <p class="card-text small">{{ m.overview[:150] }}{% if m.overview|length > 150 %}...{% endif %}</p>
+                        </div>
+                    </div>
+                </div>
+            {% endif %}
+        {% endfor %}
+    </div>
+{% elif query %}
+    <p class="text-muted">Ничего не найдено по запросу «{{ query }}».</p>
+{% endif %}
+
+<script>
+document.querySelectorAll('.add-btn').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+        const tmdbId = e.target.getAttribute('data-tmdb-id');
+        btn.disabled = true;
+        btn.innerHTML = 'Добавляю...';
+        
+        try {
+            // Берем JWT-токен из cookie (если он там) — 
+            // но т.к. у нас httponly, делаем запрос к нашему API, который читает cookie
+            const res = await fetch(`/movies/${tmdbId}/add`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ tmdb_id: parseInt(tmdbId), status: 'want_to_watch' })
+            });
+            
+            if (res.ok) {
+                btn.classList.remove('btn-success');
+                btn.classList.add('btn-secondary');
+                btn.innerHTML = '✅ Добавлено';
+            } else {
+                btn.innerHTML = '❌ Ошибка';
+                btn.disabled = false;
+            }
+        } catch (err) {
+            btn.innerHTML = '❌ Ошибка сети';
+            btn.disabled = false;
+        }
+    });
+});
+</script>
+
+{% endblock %}

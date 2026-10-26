@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% block title %}CineMate — главная{% endblock %}
+
+{% block content %}
+    {% if user %}
+        <h1 class="mb-4">Мои фильмы <small class="text-muted">({{ ratings|length }})</small></h1>
+
+        {% if not ratings %}
+            <div class="alert alert-info">
+                У тебя пока нет фильмов. <a href="/search">Найди что-нибудь</a>!
+            </div>
+        {% else %}
+            <div class="row row-cols-1 row-cols-md-3 g-4">
+                {% for r in ratings %}
+                    <div class="col">
+                        <div class="card card-movie">
+                            {% if r.movie.poster_path %}
+                                <img src="https://image.tmdb.org/t/p/w500{{ r.movie.poster_path }}" class="card-img-top poster" alt="{{ r.movie.title }}">
+                            {% endif %}
+                            <div class="card-body">
+                                <h5 class="card-title">{{ r.movie.title }}</h5>
+                                <p class="card-text small text-muted">{{ r.movie.release_date }}</p>
+                                <p class="card-text">
+                                    {% if r.score %}
+                                        <span class="badge bg-success">Оценка: {{ r.score }}/10</span>
+                                    {% else %}
+                                        <span class="badge bg-secondary">Без оценки</span>
+                                    {% endif %}
+                                    <span class="badge bg-info">{{ r.status }}</span>
+                                </p>
+                                <div class="mt-2">
+                                    <label class="form-label small">Оценка:</label>
+                                    <div class="input-group input-group-sm">
+                                        <select class="form-select rate-select" data-tmdb-id="{{ r.movie.tmdb_id }}">
+                                            <option value="">—</option>
+                                            {% for i in range(1, 11) %}
+                                                <option value="{{ i }}" {% if r.score == i %}selected{% endif %}>{{ i }}</option>
+                                            {% endfor %}
+                                        </select>
+                                        <button class="btn btn-outline-primary rate-btn" data-tmdb-id="{{ r.movie.tmdb_id }}">Сохранить</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                {% endfor %}
+            </div>
+        {% endif %}
+    {% else %}
+        <div class="text-center py-5">
+            <h1 class="display-4">🎬 CineMate</h1>
+            <p class="lead">Твой личный кинотрекер</p>
+            <a class="btn btn-primary btn-lg mt-3" href="/register">Начать</a>
+        </div>
+    {% endif %}
+    <script>
+document.querySelectorAll('.rate-btn').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+        const tmdbId = e.target.getAttribute('data-tmdb-id');
+        const select = document.querySelector(`.rate-select[data-tmdb-id="${tmdbId}"]`);
+        const score = select.value;
+        if (!score) return;
+
+        btn.disabled = true;
+        btn.innerHTML = '...';
+
+        try {
+            const res = await fetch(`/movies/${tmdbId}/rate`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ score: parseInt(score), status: 'watched' })
+            });
+            if (res.ok) {
+                btn.innerHTML = '✅';
+                setTimeout(() => location.reload(), 500);
+            } else {
+                btn.innerHTML = '❌';
+                btn.disabled = false;
+            }
+        } catch (err) {
+            btn.innerHTML = '❌';
+            btn.disabled = false;
+        }
+    });
+});
+</script>
+{% endblock %}

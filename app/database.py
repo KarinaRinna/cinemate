@@ -5,14 +5,15 @@ from sqlalchemy.orm import sessionmaker, declarative_base
 
 # Загружаем переменные из .env
 load_dotenv()
-if DATABASE_URL and DATABASE_URL.startswith("postgres://"):
-    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql+psycopg://", 1)
 
 # Читаем URL базы данных
 DATABASE_URL = os.getenv("DATABASE_URL")
 
 if not DATABASE_URL:
     raise ValueError("DATABASE_URL не найден в .env файле!")
+
+if DATABASE_URL and DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql+psycopg://", 1)
 
 # Создаём движок (engine) — соединение с PostgreSQL
 engine = create_engine(DATABASE_URL)

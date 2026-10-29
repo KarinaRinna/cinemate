@@ -21,22 +21,27 @@ router = APIRouter(tags=["pages"])
 @router.get("/", response_class=HTMLResponse)
 def home(
     request: Request,
+    filter: str = "all",  # ← новый параметр
     db: Session = Depends(get_db),
     current_user: models.User | None = Depends(get_current_user_from_cookie),
 ):
-    """Главная: если залогинен — показывает его фильмы, иначе — приветствие."""
     ratings = []
     if current_user:
-        ratings = (
-            db.query(models.Rating)
-            .filter(models.Rating.user_id == current_user.id)
-            .order_by(models.Rating.created_at.desc())
-            .all()
-        )
+        query = db.query(models.Rating).filter(models.Rating.user_id == current_user.id)
+        if filter == "want_to_watch":
+            query = query.filter(models.Rating.status == "want_to_watch")
+        elif filter == "watched":
+            query = query.filter(models.Rating.status == "watched")
+        elif filter == "rated":
+            query = query.filter(models.Rating.score.isnot(None))
+
+        ratings = query.order_by(models.Rating.created_at.desc()).all()
+
     return templates.TemplateResponse(request, "index.html", {
-    "user": current_user,
-    "ratings": ratings,
-})
+        "user": current_user,
+        "ratings": ratings,
+        "active_filter": filter,
+    })
 
 
 # === Страница логина ===
@@ -147,4 +152,37 @@ async def search_page(
     "user": current_user,
     "query": q,
     "results": results,
+    })
+    
+    
+@router.get("/stats", response_class=HTMLResponse)
+def stats_page(
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: models.User | None = Depends(get_current_user_from_cookie),
+):
+    if not current_user:
+        return RedirectResponse(url="/login", status_code=303)
+
+    from sqlalchemy import func
+    total = db.query(models.Rating).filter(models.Rating.user_id == current_user.id).count()
+    watched = db.query(models.Rating).filter(
+        models.Rating.user_id == current_user.id,
+        models.Rating.status == "watched"
+    ).count()
+    avg = db.query(func.avg(models.Rating.score)).filter(
+        models.Rating.user_id == current_user.id,
+        models.Rating.score.isnot(None)
+    ).scalar()
+
+    stats = {
+        "total": total,
+        "watched": watched,
+        "want_to_watch": total - watched,
+        "avg_score": round(float(avg), 1) if avg else None,
+    }
+
+    return templates.TemplateResponse(request, "stats.html", {
+        "user": current_user,
+        "stats": stats,
     })

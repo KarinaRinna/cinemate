@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}Статистика — CineMate{% endblock %}
+
+{% block content %}
+<h1 class="mb-4">Статистика</h1>
+
+<div class="row">
+    <div class="col-md-3 mb-3">
+        <div class="card text-center shadow-sm">
+            <div class="card-body">
+                <h6 class="text-muted">Всего</h6>
+                <h2>{{ stats.total }}</h2>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 mb-3">
+        <div class="card text-center shadow-sm">
+            <div class="card-body">
+                <h6 class="text-muted">Посмотрел</h6>
+                <h2>{{ stats.watched }}</h2>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 mb-3">
+        <div class="card text-center shadow-sm">
+            <div class="card-body">
+                <h6 class="text-muted">Хочу посмотреть</h6>
+                <h2>{{ stats.want_to_watch }}</h2>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 mb-3">
+        <div class="card text-center shadow-sm">
+            <div class="card-body">
+                <h6 class="text-muted">Средняя оценка</h6>
+                <h2>{{ stats.avg_score or '—' }}</h2>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

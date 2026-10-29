@@ -3,7 +3,24 @@
 
 {% block content %}
     {% if user %}
-        <h1 class="mb-4">Мои фильмы <small class="text-muted">({{ ratings|length }})</small></h1>
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h1 class="mb-0">Мои фильмы <small class="text-muted">({{ ratings|length }})</small></h1>
+        </div>
+
+        <ul class="nav nav-pills mb-3" id="filter-tabs">
+            <li class="nav-item">
+                <a class="nav-link {% if active_filter == 'all' or not active_filter %}active{% endif %}" href="/?filter=all">Все</a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link {% if active_filter == 'want_to_watch' %}active{% endif %}" href="/?filter=want_to_watch">Хочу посмотреть</a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link {% if active_filter == 'watched' %}active{% endif %}" href="/?filter=watched">Посмотрел</a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link {% if active_filter == 'rated' %}active{% endif %}" href="/?filter=rated">С оценкой</a>
+            </li>
+        </ul>
 
         {% if not ratings %}
             <div class="alert alert-info">
@@ -30,15 +47,12 @@
                                 </p>
                                 <div class="mt-2">
                                     <label class="form-label small">Оценка:</label>
-                                    <div class="input-group input-group-sm">
-                                        <select class="form-select rate-select" data-tmdb-id="{{ r.movie.tmdb_id }}">
-                                            <option value="">—</option>
-                                            {% for i in range(1, 11) %}
-                                                <option value="{{ i }}" {% if r.score == i %}selected{% endif %}>{{ i }}</option>
-                                            {% endfor %}
-                                        </select>
-                                        <button class="btn btn-outline-primary rate-btn" data-tmdb-id="{{ r.movie.tmdb_id }}">Сохранить</button>
+                                    <div class="star-rating" data-tmdb-id="{{ r.movie.tmdb_id }}">
+                                        {% for i in range(1, 11) %}
+                                            <span class="star {% if r.score and i <= r.score %}active{% endif %}" data-value="{{ i }}">★</span>
+                                        {% endfor %}
                                     </div>
+                                    <button class="btn btn-outline-primary btn-sm save-rating-btn mt-1" data-tmdb-id="{{ r.movie.tmdb_id }}">Сохранить</button>
                                 </div>
                             </div>
                         </div>
@@ -53,13 +67,33 @@
             <a class="btn btn-primary btn-lg mt-3" href="/register">Начать</a>
         </div>
     {% endif %}
-    <script>
-document.querySelectorAll('.rate-btn').forEach(btn => {
-    btn.addEventListener('click', async (e) => {
-        const tmdbId = e.target.getAttribute('data-tmdb-id');
-        const select = document.querySelector(`.rate-select[data-tmdb-id="${tmdbId}"]`);
-        const score = select.value;
-        if (!score) return;
+<script>
+// Обработка кликов по звёздам
+document.querySelectorAll('.star-rating').forEach(rating => {
+    rating.querySelectorAll('.star').forEach(star => {
+        star.addEventListener('click', () => {
+            const value = parseInt(star.getAttribute('data-value'));
+            const tmdbId = rating.getAttribute('data-tmdb-id');
+
+            // Подсвечиваем звёзды до выбранной
+            rating.querySelectorAll('.star').forEach(s => {
+                const v = parseInt(s.getAttribute('data-value'));
+                s.classList.toggle('active', v <= value);
+            });
+
+            // Сохраняем значение в dataset для кнопки
+            rating.setAttribute('data-selected', value);
+        });
+    });
+});
+
+// Обработка кнопки «Сохранить»
+document.querySelectorAll('.save-rating-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+        const tmdbId = btn.getAttribute('data-tmdb-id');
+        const ratingEl = document.querySelector(`.star-rating[data-tmdb-id="${tmdbId}"]`);
+        const selected = ratingEl.getAttribute('data-selected');
+        if (!selected) return;
 
         btn.disabled = true;
         btn.innerHTML = '...';
@@ -68,7 +102,7 @@ document.querySelectorAll('.rate-btn').forEach(btn => {
             const res = await fetch(`/movies/${tmdbId}/rate`, {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ score: parseInt(score), status: 'watched' })
+                body: JSON.stringify({ score: parseInt(selected), status: 'watched' })
             });
             if (res.ok) {
                 btn.innerHTML = '✅';
@@ -83,5 +117,34 @@ document.querySelectorAll('.rate-btn').forEach(btn => {
         }
     });
 });
+
+document.querySelectorAll('.remove-btn').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+        const tmdbId = e.currentTarget.getAttribute('data-tmdb-id');
+        if (!confirm('Удалить фильм из избранного?')) return;
+
+        btn.disabled = true;
+        btn.innerHTML = '...';
+
+        try {
+            const res = await fetch(`/movies/${tmdbId}/remove`, { method: 'DELETE' });
+            if (res.ok) {
+                // Плавно убираем карточку
+                btn.closest('.col').style.opacity = '0';
+                setTimeout(() => location.reload(), 300);
+            } else {
+                alert('Не удалось удалить фильм');
+                btn.disabled = false;
+                btn.innerHTML = '<i class="bi bi-trash"></i> Удалить';
+            }
+        } catch (err) {
+            alert('Ошибка сети');
+            btn.disabled = false;
+        }
+    });
+});
+
 </script>
+
+
 {% endblock %}

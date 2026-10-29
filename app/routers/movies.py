@@ -5,6 +5,7 @@ from app.tmdb import search_movies, build_poster_url
 from app.database import get_db
 from sqlalchemy.orm import Session
 from app.auth import get_current_user, get_current_user_flexible
+from sqlalchemy import func
 
 
 router = APIRouter(prefix="/movies", tags=["movies"])
@@ -104,21 +105,21 @@ async def add_movie_to_watchlist(
 
 @router.get("/me", response_model=list[schemas.RatingResponse])
 def my_movies(
+    status: str | None = None,  # ← новый параметр
     current_user: models.User = Depends(get_current_user_flexible),
     db: Session = Depends(get_db),
 ):
-    """Возвращает все фильмы текущего пользователя."""
-    ratings = (
-        db.query(models.Rating)
-        .filter(models.Rating.user_id == current_user.id)
-        .order_by(models.Rating.created_at.desc())
-        .all()
-    )
+    query = db.query(models.Rating).filter(models.Rating.user_id == current_user.id)
 
-    return [
-        _build_rating_response(r, r.movie)
-        for r in ratings
-    ]
+    if status == "want_to_watch":
+        query = query.filter(models.Rating.status == "want_to_watch")
+    elif status == "watched":
+        query = query.filter(models.Rating.status == "watched")
+    elif status == "rated":
+        query = query.filter(models.Rating.score.isnot(None))
+
+    ratings = query.order_by(models.Rating.created_at.desc()).all()
+    return [_build_rating_response(r, r.movie) for r in ratings]
 
 
 @router.patch("/{tmdb_id}/rate", response_model=schemas.RatingResponse)
@@ -167,3 +168,51 @@ def _build_rating_response(rating: models.Rating, movie: models.Movie) -> schema
         status=rating.status,
         created_at=rating.created_at,
     )
+
+
+@router.delete("/{tmdb_id}/remove", status_code=204)
+def remove_movie(
+    tmdb_id: int,
+    current_user: models.User = Depends(get_current_user_flexible),
+    db: Session = Depends(get_db),
+):
+    """Удаляет фильм из избранного текущего пользователя."""
+    movie = db.query(models.Movie).filter(models.Movie.tmdb_id == tmdb_id).first()
+    if not movie:
+        raise HTTPException(status_code=404, detail="Фильм не найден")
+
+    rating = db.query(models.Rating).filter(
+        models.Rating.user_id == current_user.id,
+        models.Rating.movie_id == movie.id,
+    ).first()
+
+    if not rating:
+        raise HTTPException(status_code=404, detail="Фильм не в избранном")
+
+    db.delete(rating)
+    db.commit()
+    return None  # 204 No Content
+
+
+@router.get("/stats")
+def get_stats(
+    current_user: models.User = Depends(get_current_user_flexible),
+    db: Session = Depends(get_db),
+):
+    """Возвращает статистику текущего пользователя."""
+    total = db.query(models.Rating).filter(models.Rating.user_id == current_user.id).count()
+    watched = db.query(models.Rating).filter(
+        models.Rating.user_id == current_user.id,
+        models.Rating.status == "watched"
+    ).count()
+    avg_score = db.query(func.avg(models.Rating.score)).filter(
+        models.Rating.user_id == current_user.id,
+        models.Rating.score.isnot(None)
+    ).scalar()
+
+    return {
+        "total": total,
+        "watched": watched,
+        "want_to_watch": total - watched,
+        "avg_score": round(float(avg_score), 1) if avg_score else None,
+    }
